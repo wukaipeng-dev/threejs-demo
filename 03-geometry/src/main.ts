@@ -6,11 +6,7 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader'
 import Stats from 'stats.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader'
-// 导入顶点法线辅助器
-import { VertexNormalsHelper } from 'three/examples/jsm/helpers/VertexNormalsHelper'
 
-// 引入 Tween
-import * as TWEEN from 'three/examples/jsm/libs/tween.module.js'
 // 创建场景
 const scene = new THREE.Scene()
 
@@ -32,65 +28,47 @@ const stats = new Stats()
 stats.showPanel(0) // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild(stats.dom)
 
-// 加载贴图
-const textureLoader = new THREE.TextureLoader()
-const texture = textureLoader.load('/texture/uv_grid_opengl.jpg')
+// 加载 gltf 模型
+const gltfLoader = new GLTFLoader()
+// gltfLoader.load('/model/city.glb', (gltf) => {
+//   scene.add(gltf.scene)
+// })
 
-// 创建一个几何平面
-const planeGeometry = new THREE.PlaneGeometry(2, 2)
-const planeMaterial = new THREE.MeshBasicMaterial({ map: texture })
-const plane = new THREE.Mesh(planeGeometry, planeMaterial)
-plane.position.x = -2
-console.log(planeGeometry.attributes)
-scene.add(plane)
+// 加载 draco 模型
+const dracoLoader = new DRACOLoader()
+// 设置 draco 解码器路径
+dracoLoader.setDecoderPath('/draco/')
+// 设置 draco 加载器
+gltfLoader.setDRACOLoader(dracoLoader)
+gltfLoader.load('/model/city.glb', (gltf) => {
+  gltf.scene.traverse((child: THREE.Mesh) => {
+    if (!child.isMesh) return
 
-// 创建和上面 planeGeometry 尺寸一样的几何平面
-const planeGeometry2 = new THREE.BufferGeometry()
-const vertices = new Float32Array([
-  -1, -1, 0,
-  1, -1, 0,
-  1, 1, 0,
-  -1, 1, 0,
-])
-planeGeometry2.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
-const indices = new Uint16Array([0, 1, 2, 0, 2, 3])
-planeGeometry2.setIndex(new THREE.BufferAttribute(indices, 1))
-const planeMaterial2 = new THREE.MeshBasicMaterial({ map: texture })
-const plane2 = new THREE.Mesh(planeGeometry2, planeMaterial2)
-// plane2.position.x = 2
-plane2.geometry.translate(10, 0, 0)
-console.log(planeGeometry2.attributes)
-scene.add(plane2)
+    const geometry = child.geometry
+    if (!geometry) return
 
-// 设置 uv 坐标
-const uv = new Float32Array([
-  0, 0,
-  1, 0,
-  1, 1,
-  0, 1,
-])
-planeGeometry2.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+    // 创建线框几何体
+    const wireframe = new THREE.WireframeGeometry(geometry)
+    // 创建线框材质
+    const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff })
+    // 创建线框
+    const wireframeMesh = new THREE.LineSegments(wireframe, wireframeMaterial)
 
-// 设置法线
-const normal = new Float32Array([
-  0, 0, 1,
-  0, 0, 1,
-  0, 0, 1,
-  0, 0, 1,
-])
-planeGeometry2.setAttribute('normal', new THREE.BufferAttribute(normal, 3))
+    // 更新线段的世界矩阵
+    child.updateWorldMatrix(true, true)
+    wireframeMesh.applyMatrix4(child.matrix)
 
-// 设置顶点法线辅助器
-const vertexNormalsHelper = new VertexNormalsHelper(plane2, 1)
-scene.add(vertexNormalsHelper)
+    scene.add(wireframeMesh)
+  })
+})
 
-// 加载背景贴图
+// 加载 hdr 贴图
 const rgbeLoader = new RGBELoader()
-rgbeLoader.load('/texture/Alex_Hart-Nature_Lab_Bones_2k.hdr', (texture) => {
-  texture.mapping = THREE.EquirectangularReflectionMapping
-  scene.background = texture
-  planeMaterial.envMap = texture
-  planeMaterial2.envMap = texture
+rgbeLoader.load('/texture/Alex_Hart-Nature_Lab_Bones_2k.hdr', (envMap) => {
+  // 设置环境贴图
+  scene.environment = envMap
+  // 设置环境贴图的映射方式
+  envMap.mapping = THREE.EquirectangularReflectionMapping
 })
 
 // 设置相机位置
@@ -118,14 +96,9 @@ function animate() {
   stats.begin()
 
   controls.update()
-
   requestAnimationFrame(animate)
-
   // 渲染
   renderer.render(scene, camera)
-
-  // 更新 Tween
-  TWEEN.update()
 
   // 结束记录性能
   stats.end()
